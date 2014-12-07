@@ -23,12 +23,9 @@ type MultiBuf interface {
 }
 
 // MaxBytes, ignored if set to value >=, if request exceeds the specified limit, the reader will return error,
-// by default buffer is not limited
+// by default buffer is not limited, negative values mean no limit
 func MaxBytes(m int64) optionSetter {
 	return func(o *options) error {
-		if m <= 0 {
-			return fmt.Errorf("MaxSizeBytes should be > 0")
-		}
 		o.maxSizeBytes = m
 		return nil
 	}
