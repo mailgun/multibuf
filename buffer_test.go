@@ -142,3 +142,107 @@ func (s *BufferSuite) TestWriteToSmallBuffer(c *C) {
 	c.Assert(wrote, Equals, l)
 	c.Assert(hashOfReader(other), Equals, hash)
 }
+
+func (s *BufferSuite) TestWriterOnceSmallBuffer(c *C) {
+	r, hash := createReaderOfSize(1)
+
+	w, err := NewWriterOnce()
+	c.Assert(err, IsNil)
+
+	total, err := io.Copy(w, r)
+	c.Assert(err, Equals, nil)
+	c.Assert(total, Equals, int64(1))
+
+	bb, err := w.Reader()
+	c.Assert(err, IsNil)
+
+	c.Assert(hashOfReader(bb), Equals, hash)
+	bb.Close()
+}
+
+func (s *BufferSuite) TestWriterOnceBigBuffer(c *C) {
+	size := int64(13631488)
+	r, hash := createReaderOfSize(size)
+
+	w, err := NewWriterOnce()
+	c.Assert(err, IsNil)
+
+	total, err := io.Copy(w, r)
+	c.Assert(err, Equals, nil)
+	c.Assert(total, Equals, size)
+
+	bb, err := w.Reader()
+	c.Assert(err, IsNil)
+
+	c.Assert(hashOfReader(bb), Equals, hash)
+	bb.Close()
+}
+
+func (s *BufferSuite) TestWriterOncePartialWrites(c *C) {
+	size := int64(13631488)
+	r, hash := createReaderOfSize(size)
+
+	w, err := NewWriterOnce()
+	c.Assert(err, IsNil)
+
+	total, err := io.CopyN(w, r, DefaultMemBytes+1)
+	c.Assert(err, Equals, nil)
+	c.Assert(total, Equals, int64(DefaultMemBytes+1))
+
+	remained := size - DefaultMemBytes - 1
+	total, err = io.CopyN(w, r, remained)
+	c.Assert(err, Equals, nil)
+	c.Assert(int64(total), Equals, remained)
+
+	bb, err := w.Reader()
+	c.Assert(err, IsNil)
+	c.Assert(w.(*writerOnce).mem, IsNil)
+	c.Assert(w.(*writerOnce).file, IsNil)
+
+	c.Assert(hashOfReader(bb), Equals, hash)
+	bb.Close()
+}
+
+func (s *BufferSuite) TestWriterOnceMaxSizeExceeded(c *C) {
+	size := int64(1000)
+	r, _ := createReaderOfSize(size)
+
+	w, err := NewWriterOnce(MemBytes(10), MaxBytes(100))
+	c.Assert(err, IsNil)
+
+	_, err = io.CopyN(w, r, 11)
+	c.Assert(err, NotNil)
+	c.Assert(w.Close(), IsNil)
+}
+
+func (s *BufferSuite) TestWriterReaderCalled(c *C) {
+	size := int64(1000)
+	r, hash := createReaderOfSize(size)
+
+	w, err := NewWriterOnce()
+	c.Assert(err, IsNil)
+
+	_, err = io.Copy(w, r)
+	c.Assert(err, IsNil)
+	c.Assert(w.Close(), IsNil)
+
+	bb, err := w.Reader()
+	c.Assert(err, IsNil)
+
+	c.Assert(hashOfReader(bb), Equals, hash)
+
+	// Subsequent calls to write and get reader will fail
+	_, err = w.Reader()
+	c.Assert(err, NotNil)
+
+	_, err = w.Write([]byte{1})
+	c.Assert(err, NotNil)
+}
+
+func (s *BufferSuite) TestWriterNoData(c *C) {
+	w, err := NewWriterOnce()
+	c.Assert(err, IsNil)
+
+	_, err = w.Reader()
+	c.Assert(err, NotNil)
+}

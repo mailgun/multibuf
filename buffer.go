@@ -10,9 +10,9 @@ import (
 	"os"
 )
 
-// MultiBuf provides Read, Close, Seek and Size methods. In addition to that it supports WriterTo interface
+// MultiReader provides Read, Close, Seek and Size methods. In addition to that it supports WriterTo interface
 // to provide efficient writing schemes, as functions like io.Copy use WriterTo when it's available.
-type MultiBuf interface {
+type MultiReader interface {
 	io.Reader
 	io.Seeker
 	io.Closer
@@ -22,11 +22,22 @@ type MultiBuf interface {
 	Size() (int64, error)
 }
 
+// WriterOnce implements write once, read many times writer. Create a WriterOnce and write to it, once Reader() function has been
+// called, the internal data is transferred to MultiReader and this instance of WriterOnce should be no longer used.
+type WriterOnce interface {
+	// Write implements io.Writer
+	Write(p []byte) (int, error)
+	// Reader transfers all data written to this writer to MultiReader. If there was no data written it retuns an error
+	Reader() (MultiReader, error)
+	// WriterOnce owns the data before Reader has been called, so Close will close all the underlying files if Reader has not been called.
+	Close() error
+}
+
 // MaxBytes, ignored if set to value >=, if request exceeds the specified limit, the reader will return error,
 // by default buffer is not limited, negative values mean no limit
 func MaxBytes(m int64) optionSetter {
 	return func(o *options) error {
-		o.maxSizeBytes = m
+		o.maxBytes = m
 		return nil
 	}
 }
@@ -37,12 +48,35 @@ func MemBytes(m int64) optionSetter {
 		if m < 0 {
 			return fmt.Errorf("MemBytes should be >= 0")
 		}
-		o.maxSizeBytes = m
+		o.maxBytes = m
 		return nil
 	}
 }
 
-// New returns MultiBuf that can limit the size of the buffer and persist large buffers to disk.
+// NewWriterOnce returns io.ReadWrite compatilble objkect that can limit the size of the buffer and persist large buffers to disk.
+// WriterOnce implements write once, read many times writer. Create a WriterOnce and write to it, once Reader() function has been
+// called, the internal data is transferred to MultiReader and this instance of WriterOnce should be no longer used.
+// By default NewWriterOnce returns unbound buffer that will allow to write up to 1MB in RAM and will start buffering to disk
+// It supports multiple functional optional arguments:
+//
+//    // Buffer up to 1MB in RAM and limit max buffer size to 20MB
+//    multibuf.NewWriterOnce(r, multibuf.MemBytes(1024 * 1024), multibuf.MaxBytes(1024 * 1024 * 20))
+//
+//
+func NewWriterOnce(setters ...optionSetter) (WriterOnce, error) {
+	o := options{
+		memBytes: DefaultMemBytes,
+		maxBytes: DefaultMaxBytes,
+	}
+	for _, s := range setters {
+		if err := s(&o); err != nil {
+			return nil, err
+		}
+	}
+	return &writerOnce{o: o}, nil
+}
+
+// New returns MultiReader that can limit the size of the buffer and persist large buffers to disk.
 // By default New returns unbound buffer that will read up to 1MB in RAM and will start buffering to disk
 // It supports multiple functional optional arguments:
 //
@@ -50,10 +84,10 @@ func MemBytes(m int64) optionSetter {
 //    multibuf.New(r, multibuf.MemBytes(1024 * 1024), multibuf.MaxBytes(1024 * 1024 * 20))
 //
 //
-func New(input io.Reader, setters ...optionSetter) (MultiBuf, error) {
+func New(input io.Reader, setters ...optionSetter) (MultiReader, error) {
 	o := options{
-		memBytes:     DefaultMemBytes,
-		maxSizeBytes: DefaultMaxSizeBytes,
+		memBytes: DefaultMemBytes,
+		maxBytes: DefaultMaxBytes,
 	}
 
 	for _, s := range setters {
@@ -78,15 +112,15 @@ func New(input io.Reader, setters ...optionSetter) (MultiBuf, error) {
 	// This means that we have exceeded all the memory capacity and we will start buffering the body to disk.
 	totalBytes := int64(len(buffer))
 	if memReader.N <= 0 {
-		file, err = ioutil.TempFile("", "multibuf-")
+		file, err = ioutil.TempFile("", tempFilePrefix)
 		if err != nil {
 			return nil, err
 		}
 		os.Remove(file.Name())
 
 		readSrc := input
-		if o.maxSizeBytes > 0 {
-			readSrc = &maxReader{R: input, Max: o.maxSizeBytes - o.memBytes}
+		if o.maxBytes > 0 {
+			readSrc = &maxReader{R: input, Max: o.maxBytes - o.memBytes}
 		}
 
 		writtenBytes, err := io.Copy(file, readSrc)
@@ -118,8 +152,8 @@ func (e *MaxSizeReachedError) Error() string {
 }
 
 const (
-	DefaultMemBytes     = 1048576
-	DefaultMaxSizeBytes = -1
+	DefaultMemBytes = 1048576
+	DefaultMaxBytes = -1
 	// Equivalent of bytes.MinRead used in ioutil.ReadAll
 	DefaultBufferBytes = 512
 )
@@ -220,7 +254,7 @@ type options struct {
 	// If the data size exceeds the limit, the remaining request part will be saved on the file system.
 	memBytes int64
 
-	maxSizeBytes int64
+	maxBytes int64
 }
 
 type optionSetter func(o *options) error
@@ -244,3 +278,125 @@ func (r *maxReader) Read(p []byte) (int, error) {
 	}
 	return readBytes, err
 }
+
+const (
+	writerInit = iota
+	writerMem
+	writerFile
+	writerCalledRead
+	writerErr
+)
+
+type writerOnce struct {
+	o         options
+	err       error
+	state     int
+	mem       *bytes.Buffer
+	file      *os.File
+	total     int64
+	cleanupFn cleanupFunc
+}
+
+// how many bytes we can still write to memory
+func (w *writerOnce) writeToMem(p []byte) int {
+	left := w.o.memBytes - w.total
+	if left <= 0 {
+		return 0
+	}
+	bufLen := len(p)
+	if int64(bufLen) < left {
+		return bufLen
+	}
+	return int(left)
+}
+
+func (w *writerOnce) Write(p []byte) (int, error) {
+	out, err := w.write(p)
+	return out, err
+}
+
+func (w *writerOnce) Close() error {
+	if w.file != nil {
+		return w.file.Close()
+	}
+	return nil
+}
+
+func (w *writerOnce) write(p []byte) (int, error) {
+	if w.o.maxBytes > 0 && w.o.maxBytes > int64(len(p))+w.total {
+		return 0, fmt.Errorf("Maximum size exceeded")
+	}
+	switch w.state {
+	case writerCalledRead:
+		return 0, fmt.Errorf("can not write after reader has been called")
+	case writerInit:
+		w.mem = &bytes.Buffer{}
+		w.state = writerMem
+		fallthrough
+	case writerMem:
+		writeToMem := w.writeToMem(p)
+		if writeToMem > 0 {
+			wrote, err := w.mem.Write(p[:writeToMem])
+			w.total += int64(wrote)
+			if err != nil {
+				return wrote, err
+			}
+		}
+		left := len(p) - writeToMem
+		if left <= 0 {
+			return len(p), nil
+		}
+		// we can't write to memory any more, switch to file
+		if err := w.initFile(); err != nil {
+			return int(writeToMem), err
+		}
+		w.state = writerFile
+		wrote, err := w.file.Write(p[writeToMem:])
+		w.total += int64(wrote)
+		return len(p), err
+	case writerFile:
+		wrote, err := w.file.Write(p)
+		w.total += int64(wrote)
+		return wrote, err
+	}
+	return 0, fmt.Errorf("unsupported state: %d", w.state)
+}
+
+func (w *writerOnce) initFile() error {
+	file, err := ioutil.TempFile("", tempFilePrefix)
+	if err != nil {
+		return err
+	}
+	w.file = file
+	w.cleanupFn = func() error {
+		file.Close()
+		return nil
+	}
+	return nil
+}
+
+func (w *writerOnce) Reader() (MultiReader, error) {
+	switch w.state {
+	case writerInit:
+		return nil, fmt.Errorf("no data ready")
+	case writerCalledRead:
+		return nil, fmt.Errorf("reader has been called")
+	case writerMem:
+		w.state = writerCalledRead
+		return newBuf(w.total, nil, bytes.NewReader(w.mem.Bytes())), nil
+	case writerFile:
+		_, err := w.file.Seek(0, 0)
+		if err != nil {
+			return nil, err
+		}
+		// we are not responsible for file and buffer any more
+		w.state = writerCalledRead
+		br, fr := bytes.NewReader(w.mem.Bytes()), w.file
+		w.file = nil
+		w.mem = nil
+		return newBuf(w.total, w.cleanupFn, br, fr), nil
+	}
+	return nil, fmt.Errorf("unsupported state: %d\n", w.state)
+}
+
+const tempFilePrefix = "temp-multibuf-"
