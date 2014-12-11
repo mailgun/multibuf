@@ -48,7 +48,7 @@ func MemBytes(m int64) optionSetter {
 		if m < 0 {
 			return fmt.Errorf("MemBytes should be >= 0")
 		}
-		o.maxBytes = m
+		o.memBytes = m
 		return nil
 	}
 }
@@ -95,7 +95,9 @@ func New(input io.Reader, setters ...optionSetter) (MultiReader, error) {
 			return nil, err
 		}
 	}
-
+	if o.maxBytes < o.memBytes {
+		o.memBytes = o.maxBytes
+	}
 	memReader := &io.LimitedReader{
 		R: input,      // Read from this reader
 		N: o.memBytes, // Maximum amount of data to read

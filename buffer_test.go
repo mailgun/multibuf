@@ -117,6 +117,14 @@ func (s *BufferSuite) TestLimitExceeds(c *C) {
 	c.Assert(bb, IsNil)
 }
 
+func (s *BufferSuite) TestLimitExceedsMemBytes(c *C) {
+	requestSize := int64(1057576)
+	r, _ := createReaderOfSize(requestSize)
+	bb, err := New(r, MemBytes(requestSize+1), MaxBytes(requestSize-1))
+	c.Assert(err, FitsTypeOf, &MaxSizeReachedError{})
+	c.Assert(bb, IsNil)
+}
+
 func (s *BufferSuite) TestWriteToBigBuffer(c *C) {
 	l := int64(13631488)
 	r, hash := createReaderOfSize(l)
