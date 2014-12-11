@@ -210,7 +210,7 @@ func (s *BufferSuite) TestWriterOnceMaxSizeExceeded(c *C) {
 	w, err := NewWriterOnce(MemBytes(10), MaxBytes(100))
 	c.Assert(err, IsNil)
 
-	_, err = io.CopyN(w, r, 11)
+	_, err = io.Copy(w, r)
 	c.Assert(err, NotNil)
 	c.Assert(w.Close(), IsNil)
 }

@@ -323,8 +323,8 @@ func (w *writerOnce) Close() error {
 }
 
 func (w *writerOnce) write(p []byte) (int, error) {
-	if w.o.maxBytes > 0 && w.o.maxBytes > int64(len(p))+w.total {
-		return 0, fmt.Errorf("Maximum size exceeded")
+	if w.o.maxBytes > 0 && int64(len(p))+w.total > w.o.maxBytes {
+		return 0, fmt.Errorf("total size of %d exceeded allowed %d", int64(len(p))+w.total, w.o.maxBytes)
 	}
 	switch w.state {
 	case writerCalledRead:
