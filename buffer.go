@@ -95,9 +95,10 @@ func New(input io.Reader, setters ...optionSetter) (MultiReader, error) {
 			return nil, err
 		}
 	}
-	if o.maxBytes < o.memBytes {
+	if o.maxBytes > 0 && o.maxBytes < o.memBytes {
 		o.memBytes = o.maxBytes
 	}
+
 	memReader := &io.LimitedReader{
 		R: input,      // Read from this reader
 		N: o.memBytes, // Maximum amount of data to read
