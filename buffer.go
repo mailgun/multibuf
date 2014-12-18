@@ -68,6 +68,9 @@ func NewWriterOnce(setters ...optionSetter) (WriterOnce, error) {
 		memBytes: DefaultMemBytes,
 		maxBytes: DefaultMaxBytes,
 	}
+	if o.memBytes == 0 {
+		o.memBytes = DefaultMemBytes
+	}
 	for _, s := range setters {
 		if err := s(&o); err != nil {
 			return nil, err
@@ -94,6 +97,9 @@ func New(input io.Reader, setters ...optionSetter) (MultiReader, error) {
 		if err := s(&o); err != nil {
 			return nil, err
 		}
+	}
+	if o.memBytes == 0 {
+		o.memBytes = DefaultMemBytes
 	}
 	if o.maxBytes > 0 && o.maxBytes < o.memBytes {
 		o.memBytes = o.maxBytes
