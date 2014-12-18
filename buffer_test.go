@@ -77,6 +77,24 @@ func (s *BufferSuite) TestSeek(c *C) {
 	c.Assert(l, Equals, tlen)
 }
 
+func (s *BufferSuite) TestSeekWithFile(c *C) {
+	tlen := int64(DefaultMemBytes)
+	r, hash := createReaderOfSize(tlen)
+	bb, err := New(r, MemBytes(1))
+
+	c.Assert(err, IsNil)
+	c.Assert(hashOfReader(bb), Equals, hash)
+	l, err := bb.Size()
+	c.Assert(err, IsNil)
+	c.Assert(l, Equals, tlen)
+
+	bb.Seek(0, 0)
+	c.Assert(hashOfReader(bb), Equals, hash)
+	l, err = bb.Size()
+	c.Assert(err, IsNil)
+	c.Assert(l, Equals, tlen)
+}
+
 func (s *BufferSuite) TestSeekFirst(c *C) {
 	tlen := int64(1057576)
 	r, hash := createReaderOfSize(tlen)
