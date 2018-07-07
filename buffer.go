@@ -1,4 +1,4 @@
-// package multibuf implements buffer optimized for streaming large chunks of data,
+// Package multibuf implements buffer optimized for streaming large chunks of data,
 // multiple reads and  optional partial buffering to disk.
 package multibuf
 
@@ -157,9 +157,10 @@ type MaxSizeReachedError struct {
 }
 
 func (e *MaxSizeReachedError) Error() string {
-	return fmt.Sprintf("Maximum size %d was reached", e)
+	return fmt.Sprintf("Maximum size %d was reached", e.MaxSize)
 }
 
+// Default sizes
 const (
 	DefaultMemBytes = 1048576
 	DefaultMaxBytes = -1
@@ -298,7 +299,6 @@ const (
 
 type writerOnce struct {
 	o         options
-	err       error
 	state     int
 	mem       *bytes.Buffer
 	file      *os.File
@@ -357,7 +357,7 @@ func (w *writerOnce) write(p []byte) (int, error) {
 		}
 		// we can't write to memory any more, switch to file
 		if err := w.initFile(); err != nil {
-			return int(writeToMem), err
+			return writeToMem, err
 		}
 		w.state = writerFile
 		wrote, err := w.file.Write(p[writeToMem:])
@@ -406,7 +406,7 @@ func (w *writerOnce) Reader() (MultiReader, error) {
 		w.mem = nil
 		return newBuf(w.total, w.cleanupFn, br, fr), nil
 	}
-	return nil, fmt.Errorf("unsupported state: %d\n", w.state)
+	return nil, fmt.Errorf("unsupported state: %d", w.state)
 }
 
 const tempFilePrefix = "temp-multibuf-"

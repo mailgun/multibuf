@@ -99,6 +99,7 @@ func (s *BufferSuite) TestSeekFirst(c *C) {
 	tlen := int64(1057576)
 	r, hash := createReaderOfSize(tlen)
 	bb, err := New(r)
+	c.Assert(err, IsNil)
 
 	l, err := bb.Size()
 	c.Assert(err, IsNil)
