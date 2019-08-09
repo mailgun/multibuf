@@ -213,7 +213,7 @@ func TestWriterOncePartialWrites(t *testing.T) {
 	remained := size - DefaultMemBytes - 1
 	total, err = io.CopyN(w, r, remained)
 	assert.Equal(t, nil, err)
-	assert.Equal(t, remained, int64(total))
+	assert.Equal(t, remained, total)
 
 	bb, err := w.Reader()
 	assert.NoError(t, err)
