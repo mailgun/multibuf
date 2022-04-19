@@ -68,13 +68,13 @@ func NewWriterOnce(setters ...optionSetter) (WriterOnce, error) {
 		memBytes: DefaultMemBytes,
 		maxBytes: DefaultMaxBytes,
 	}
-	if o.memBytes == 0 {
-		o.memBytes = DefaultMemBytes
-	}
 	for _, s := range setters {
 		if err := s(&o); err != nil {
 			return nil, err
 		}
+	}
+	if o.memBytes == 0 {
+		o.memBytes = DefaultMemBytes
 	}
 	return &writerOnce{o: o}, nil
 }
