@@ -2,7 +2,7 @@ clean:
 	find . -name flymake_* -delete
 
 test: clean
-	go test -v .
+	go test -race -v .
 
 test-grep: clean
 	go test -v . -check.f=$(e)

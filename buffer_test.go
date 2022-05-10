@@ -9,14 +9,8 @@ import (
 	"os"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/stretchr/testify/assert"
 )
-
-func Test(t *testing.T) { TestingT(t) }
-
-type BufferSuite struct{}
-
-var _ = Suite(&BufferSuite{})
 
 func createReaderOfSize(size int64) (reader io.Reader, hash string) {
 	f, err := os.Open("/dev/urandom")
@@ -44,232 +38,232 @@ func hashOfReader(r io.Reader) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func (s *BufferSuite) TestSmallBuffer(c *C) {
+func TestSmallBuffer(t *testing.T) {
 	r, hash := createReaderOfSize(1)
 	bb, err := New(r)
-	c.Assert(err, IsNil)
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.NoError(t, err)
+	assert.Equal(t, hash, hashOfReader(bb))
 	bb.Close()
 }
 
-func (s *BufferSuite) TestBigBuffer(c *C) {
+func TestBigBuffer(t *testing.T) {
 	r, hash := createReaderOfSize(13631488)
 	bb, err := New(r)
-	c.Assert(err, IsNil)
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.NoError(t, err)
+	assert.Equal(t, hash, hashOfReader(bb))
 }
 
-func (s *BufferSuite) TestSeek(c *C) {
+func TestSeek(t *testing.T) {
 	tlen := int64(1057576)
 	r, hash := createReaderOfSize(tlen)
 	bb, err := New(r)
 
-	c.Assert(err, IsNil)
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.NoError(t, err)
+	assert.Equal(t, hash, hashOfReader(bb))
 	l, err := bb.Size()
-	c.Assert(err, IsNil)
-	c.Assert(l, Equals, tlen)
+	assert.NoError(t, err)
+	assert.Equal(t, tlen, l)
 
 	bb.Seek(0, 0)
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.Equal(t, hash, hashOfReader(bb))
 	l, err = bb.Size()
-	c.Assert(err, IsNil)
-	c.Assert(l, Equals, tlen)
+	assert.NoError(t, err)
+	assert.Equal(t, tlen, l)
 }
 
-func (s *BufferSuite) TestSeekWithFile(c *C) {
+func TestSeekWithFile(t *testing.T) {
 	tlen := int64(DefaultMemBytes)
 	r, hash := createReaderOfSize(tlen)
 	bb, err := New(r, MemBytes(1))
 
-	c.Assert(err, IsNil)
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.NoError(t, err)
+	assert.Equal(t, hash, hashOfReader(bb))
 	l, err := bb.Size()
-	c.Assert(err, IsNil)
-	c.Assert(l, Equals, tlen)
+	assert.NoError(t, err)
+	assert.Equal(t, tlen, l)
 
 	bb.Seek(0, 0)
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.Equal(t, hash, hashOfReader(bb))
 	l, err = bb.Size()
-	c.Assert(err, IsNil)
-	c.Assert(l, Equals, tlen)
+	assert.NoError(t, err)
+	assert.Equal(t, tlen, l)
 }
 
-func (s *BufferSuite) TestSeekFirst(c *C) {
+func TestSeekFirst(t *testing.T) {
 	tlen := int64(1057576)
 	r, hash := createReaderOfSize(tlen)
 	bb, err := New(r)
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
 	l, err := bb.Size()
-	c.Assert(err, IsNil)
-	c.Assert(l, Equals, tlen)
+	assert.NoError(t, err)
+	assert.Equal(t, tlen, l)
 
-	c.Assert(err, IsNil)
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.NoError(t, err)
+	assert.Equal(t, hash, hashOfReader(bb))
 
 	bb.Seek(0, 0)
 
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.Equal(t, hash, hashOfReader(bb))
 	l, err = bb.Size()
-	c.Assert(err, IsNil)
-	c.Assert(l, Equals, tlen)
+	assert.NoError(t, err)
+	assert.Equal(t, tlen, l)
 }
 
-func (s *BufferSuite) TestLimitDoesNotExceed(c *C) {
+func TestLimitDoesNotExceed(t *testing.T) {
 	requestSize := int64(1057576)
 	r, hash := createReaderOfSize(requestSize)
 	bb, err := New(r, MemBytes(1024), MaxBytes(requestSize+1))
-	c.Assert(err, IsNil)
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.NoError(t, err)
+	assert.Equal(t, hash, hashOfReader(bb))
 	size, err := bb.Size()
-	c.Assert(err, IsNil)
-	c.Assert(size, Equals, requestSize)
+	assert.NoError(t, err)
+	assert.Equal(t, requestSize, size)
 	bb.Close()
 }
 
-func (s *BufferSuite) TestLimitExceeds(c *C) {
+func TestLimitExceeds(t *testing.T) {
 	requestSize := int64(1057576)
 	r, _ := createReaderOfSize(requestSize)
 	bb, err := New(r, MemBytes(1024), MaxBytes(requestSize-1))
-	c.Assert(err, FitsTypeOf, &MaxSizeReachedError{})
-	c.Assert(bb, IsNil)
+	assert.IsType(t, &MaxSizeReachedError{}, err)
+	assert.Nil(t, bb)
 }
 
-func (s *BufferSuite) TestLimitExceedsMemBytes(c *C) {
+func TestLimitExceedsMemBytes(t *testing.T) {
 	requestSize := int64(1057576)
 	r, _ := createReaderOfSize(requestSize)
 	bb, err := New(r, MemBytes(requestSize+1), MaxBytes(requestSize-1))
-	c.Assert(err, FitsTypeOf, &MaxSizeReachedError{})
-	c.Assert(bb, IsNil)
+	assert.IsType(t, &MaxSizeReachedError{}, err)
+	assert.Nil(t, bb)
 }
 
-func (s *BufferSuite) TestWriteToBigBuffer(c *C) {
+func TestWriteToBigBuffer(t *testing.T) {
 	l := int64(13631488)
 	r, hash := createReaderOfSize(l)
 	bb, err := New(r)
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
 	other := &bytes.Buffer{}
 	wrote, err := bb.WriteTo(other)
-	c.Assert(err, IsNil)
-	c.Assert(wrote, Equals, l)
-	c.Assert(hashOfReader(other), Equals, hash)
+	assert.NoError(t, err)
+	assert.Equal(t, l, wrote)
+	assert.Equal(t, hash, hashOfReader(other))
 }
 
-func (s *BufferSuite) TestWriteToSmallBuffer(c *C) {
+func TestWriteToSmallBuffer(t *testing.T) {
 	l := int64(1)
 	r, hash := createReaderOfSize(l)
 	bb, err := New(r)
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
 	other := &bytes.Buffer{}
 	wrote, err := bb.WriteTo(other)
-	c.Assert(err, IsNil)
-	c.Assert(wrote, Equals, l)
-	c.Assert(hashOfReader(other), Equals, hash)
+	assert.NoError(t, err)
+	assert.Equal(t, l, wrote)
+	assert.Equal(t, hash, hashOfReader(other))
 }
 
-func (s *BufferSuite) TestWriterOnceSmallBuffer(c *C) {
+func TestWriterOnceSmallBuffer(t *testing.T) {
 	r, hash := createReaderOfSize(1)
 
 	w, err := NewWriterOnce()
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
 	total, err := io.Copy(w, r)
-	c.Assert(err, Equals, nil)
-	c.Assert(total, Equals, int64(1))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, int64(1), total)
 
 	bb, err := w.Reader()
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.Equal(t, hash, hashOfReader(bb))
 	bb.Close()
 }
 
-func (s *BufferSuite) TestWriterOnceBigBuffer(c *C) {
+func TestWriterOnceBigBuffer(t *testing.T) {
 	size := int64(13631488)
 	r, hash := createReaderOfSize(size)
 
 	w, err := NewWriterOnce()
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
 	total, err := io.Copy(w, r)
-	c.Assert(err, Equals, nil)
-	c.Assert(total, Equals, size)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, size, total)
 
 	bb, err := w.Reader()
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.Equal(t, hash, hashOfReader(bb))
 	bb.Close()
 }
 
-func (s *BufferSuite) TestWriterOncePartialWrites(c *C) {
+func TestWriterOncePartialWrites(t *testing.T) {
 	size := int64(13631488)
 	r, hash := createReaderOfSize(size)
 
 	w, err := NewWriterOnce()
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
 	total, err := io.CopyN(w, r, DefaultMemBytes+1)
-	c.Assert(err, Equals, nil)
-	c.Assert(total, Equals, int64(DefaultMemBytes+1))
+	assert.Equal(t, nil, err)
+	assert.Equal(t, int64(DefaultMemBytes+1), total)
 
 	remained := size - DefaultMemBytes - 1
 	total, err = io.CopyN(w, r, remained)
-	c.Assert(err, Equals, nil)
-	c.Assert(int64(total), Equals, remained)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, remained, total)
 
 	bb, err := w.Reader()
-	c.Assert(err, IsNil)
-	c.Assert(w.(*writerOnce).mem, IsNil)
-	c.Assert(w.(*writerOnce).file, IsNil)
+	assert.NoError(t, err)
+	assert.Nil(t, w.(*writerOnce).mem)
+	assert.Nil(t, w.(*writerOnce).file)
 
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.Equal(t, hash, hashOfReader(bb))
 	bb.Close()
 }
 
-func (s *BufferSuite) TestWriterOnceMaxSizeExceeded(c *C) {
+func TestWriterOnceMaxSizeExceeded(t *testing.T) {
 	size := int64(1000)
 	r, _ := createReaderOfSize(size)
 
 	w, err := NewWriterOnce(MemBytes(10), MaxBytes(100))
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
 	_, err = io.Copy(w, r)
-	c.Assert(err, NotNil)
-	c.Assert(w.Close(), IsNil)
+	assert.Error(t, err)
+	assert.NoError(t, w.Close())
 }
 
-func (s *BufferSuite) TestWriterReaderCalled(c *C) {
+func TestWriterReaderCalled(t *testing.T) {
 	size := int64(1000)
 	r, hash := createReaderOfSize(size)
 
 	w, err := NewWriterOnce()
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
 	_, err = io.Copy(w, r)
-	c.Assert(err, IsNil)
-	c.Assert(w.Close(), IsNil)
+	assert.NoError(t, err)
+	assert.NoError(t, w.Close())
 
 	bb, err := w.Reader()
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
-	c.Assert(hashOfReader(bb), Equals, hash)
+	assert.Equal(t, hash, hashOfReader(bb))
 
 	// Subsequent calls to write and get reader will fail
 	_, err = w.Reader()
-	c.Assert(err, NotNil)
+	assert.Error(t, err)
 
 	_, err = w.Write([]byte{1})
-	c.Assert(err, NotNil)
+	assert.Error(t, err)
 }
 
-func (s *BufferSuite) TestWriterNoData(c *C) {
+func TestWriterNoData(t *testing.T) {
 	w, err := NewWriterOnce()
-	c.Assert(err, IsNil)
+	assert.NoError(t, err)
 
 	_, err = w.Reader()
-	c.Assert(err, NotNil)
+	assert.Error(t, err)
 }

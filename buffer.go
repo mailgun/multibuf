@@ -27,13 +27,13 @@ type MultiReader interface {
 type WriterOnce interface {
 	// Write implements io.Writer
 	Write(p []byte) (int, error)
-	// Reader transfers all data written to this writer to MultiReader. If there was no data written it retuns an error
+	// Reader transfers all data written to this writer to MultiReader. If there was no data written it returns an error
 	Reader() (MultiReader, error)
 	// WriterOnce owns the data before Reader has been called, so Close will close all the underlying files if Reader has not been called.
 	Close() error
 }
 
-// MaxBytes, ignored if set to value >=, if request exceeds the specified limit, the reader will return error,
+// MaxBytes ignored if set to value >=, if request exceeds the specified limit, the reader will return error,
 // by default buffer is not limited, negative values mean no limit
 func MaxBytes(m int64) optionSetter {
 	return func(o *options) error {
@@ -46,7 +46,7 @@ func MaxBytes(m int64) optionSetter {
 func MemBytes(m int64) optionSetter {
 	return func(o *options) error {
 		if m < 0 {
-			return fmt.Errorf("MemBytes should be >= 0")
+			return fmt.Errorf("memBytes should be >= 0")
 		}
 		o.memBytes = m
 		return nil
