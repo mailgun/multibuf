@@ -164,6 +164,16 @@ func TestWriteToSmallBuffer(t *testing.T) {
 	assert.Equal(t, hash, hashOfReader(other))
 }
 
+func TestWriterOnceMemBytesDefault(t *testing.T) {
+	w, err := NewWriterOnce(MemBytes(0))
+	assert.NoError(t, err)
+
+	wo, ok := w.(*writerOnce)
+	assert.True(t, ok)
+
+	assert.Equal(t, DefaultMemBytes, int(wo.o.memBytes))
+}
+
 func TestWriterOnceSmallBuffer(t *testing.T) {
 	r, hash := createReaderOfSize(1)
 
