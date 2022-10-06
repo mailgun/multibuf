@@ -4,10 +4,20 @@ package multibuf
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
+)
+
+var (
+	// ErrNoDataReady is an error when getting the reader while the data is not
+	// ready.
+	ErrNoDataReady = errors.New("mailgun/multibuf: no data ready")
+	// ErrReaderHasBeenCalled is an error when getting the reader or writing
+	// while the reader has been called.
+	ErrReaderHasBeenCalled = errors.New("mailgun/multibuf: reader has been called")
 )
 
 // MultiReader provides Read, Close, Seek and Size methods. In addition to that it supports WriterTo interface
@@ -337,7 +347,7 @@ func (w *writerOnce) write(p []byte) (int, error) {
 	}
 	switch w.state {
 	case writerCalledRead:
-		return 0, fmt.Errorf("can not write after reader has been called")
+		return 0, ErrReaderHasBeenCalled
 	case writerInit:
 		w.mem = &bytes.Buffer{}
 		w.state = writerMem
@@ -388,9 +398,9 @@ func (w *writerOnce) initFile() error {
 func (w *writerOnce) Reader() (MultiReader, error) {
 	switch w.state {
 	case writerInit:
-		return nil, fmt.Errorf("no data ready")
+		return nil, ErrNoDataReady
 	case writerCalledRead:
-		return nil, fmt.Errorf("reader has been called")
+		return nil, ErrReaderHasBeenCalled
 	case writerMem:
 		w.state = writerCalledRead
 		return newBuf(w.total, nil, bytes.NewReader(w.mem.Bytes())), nil

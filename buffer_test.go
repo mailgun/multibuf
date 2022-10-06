@@ -264,10 +264,10 @@ func TestWriterReaderCalled(t *testing.T) {
 
 	// Subsequent calls to write and get reader will fail
 	_, err = w.Reader()
-	assert.Error(t, err)
+	assert.EqualError(t, err, ErrReaderHasBeenCalled.Error())
 
 	_, err = w.Write([]byte{1})
-	assert.Error(t, err)
+	assert.EqualError(t, err, ErrReaderHasBeenCalled.Error())
 }
 
 func TestWriterNoData(t *testing.T) {
@@ -275,5 +275,5 @@ func TestWriterNoData(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = w.Reader()
-	assert.Error(t, err)
+	assert.EqualError(t, err, ErrNoDataReady.Error())
 }
